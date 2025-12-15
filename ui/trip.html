@@ -1,0 +1,94 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Trip</title>
+  <style>
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;margin:0;background:#f6f6f6}
+    header{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px;background:#fff;border-bottom:1px solid #e6e6e6}
+    .btn{border:1px solid #ccc;border-radius:10px;padding:10px 12px;background:#fff}
+    .wrap{padding:14px}
+    .day{font-weight:800;opacity:.85;margin:18px 0 10px}
+    .moment{background:#fff;border:1px solid #e6e6e6;border-radius:14px;padding:12px;margin-bottom:12px}
+    .when{font-weight:700}
+    .where{opacity:.7;margin-top:2px}
+    .story{margin-top:8px;line-height:1.35}
+  </style>
+</head>
+<body>
+  <header>
+    <button class="btn" onclick="location.href='/ui/trips'">Back</button>
+    <div style="flex:1;min-width:0">
+      <div id="title" style="font-weight:900;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></div>
+      <div id="dates" style="opacity:.7;font-size:13px"></div>
+    </div>
+    <button class="btn" id="btnAdd">+ Moment</button>
+  </header>
+
+  <div class="wrap" id="timeline">Loading…</div>
+
+  <script>
+    const tripId = new URLSearchParams(location.search).get("tripId");
+
+    async function api(path){
+      const email = (localStorage.getItem("om_email")||"").trim();
+      const res = await fetch(path, { headers:{ "X-User-Email": email }});
+      if(!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
+
+    function fmtWhen(t){
+      if(!t) return "";
+      return new Date(t).toLocaleString();
+    }
+
+    document.getElementById("btnAdd").onclick = () => {
+      location.href = `/ui/add-moment?tripId=${encodeURIComponent(tripId)}`;
+    };
+
+    (async () => {
+      try{
+        const trip = await api(`/api/trips/${tripId}`);
+        document.getElementById("title").textContent = trip.title || "Trip";
+        document.getElementById("dates").textContent = `${trip.startDate||""} ${trip.endDate?("→ "+trip.endDate):""}`;
+
+        const moments = await api(`/api/trips/${tripId}/moments`);
+        const wrap = document.getElementById("timeline");
+        wrap.innerHTML = "";
+
+        const byDay = new Map();
+        moments.forEach(m=>{
+          const k = m.dayKey || "Unknown";
+          if(!byDay.has(k)) byDay.set(k, []);
+          byDay.get(k).push(m);
+        });
+
+        [...byDay.keys()].sort().forEach(day=>{
+          const h = document.createElement("div");
+          h.className = "day";
+          h.textContent = `Day • ${day}`;
+          wrap.appendChild(h);
+
+          byDay.get(day).forEach(m=>{
+            const d = document.createElement("div");
+            d.className = "moment";
+            d.innerHTML = `
+              <div class="when">${fmtWhen(m.momentTime) || "—"}</div>
+              <div class="where">${m.locationName || ""}</div>
+              <div class="story">${(m.story||"").replace(/</g,"&lt;")}</div>
+            `;
+            wrap.appendChild(d);
+          });
+        });
+
+        if(!moments.length){
+          wrap.innerHTML = "<div style='opacity:.7'>No moments yet. Tap + Moment.</div>";
+        }
+      }catch(e){
+        document.getElementById("timeline").innerHTML = `<div style="color:#b00">Error: ${e.message}</div>`;
+      }
+    })();
+  </script>
+</body>
+</html>
