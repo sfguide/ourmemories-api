@@ -376,6 +376,9 @@ app.get("/test", (req, res) => {
   `);
 });
 
+app.get("/ui/trips", (req, res) => res.sendFile(process.cwd() + "/ui/trips.html"));
+app.get("/ui/trip", (req, res) => res.sendFile(process.cwd() + "/ui/trip.html"));
+app.get("/ui/add-moment", (req, res) => res.sendFile(process.cwd() + "/ui/add-moment.html"));
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => console.log(`API listening on ${port}`));
