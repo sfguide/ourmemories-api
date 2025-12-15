@@ -317,5 +317,65 @@ app.post("/api/trips/:tripId/moments", requireEmail, async (req, res) => {
   }
 });
 
+app.get("/", (req, res) => {
+  res.type("html").send(`
+    <h2>OurMemories API is running ✅</h2>
+    <ul>
+      <li><a href="/health">/health</a></li>
+      <li><a href="/test">/test</a></li>
+    </ul>
+  `);
+});
+
+app.get("/test", (req, res) => {
+  res.send(`
+  <html>
+    <body style="font-family:Arial;padding:20px">
+      <h2>OurMemories API Test</h2>
+
+      <p>Email: <input id="email" value="test@example.com" style="width:260px"/></p>
+      <p>Name: <input id="name" value="Test User" style="width:260px"/></p>
+
+      <button onclick="createTrip()">Create Test Trip</button>
+      <button onclick="listTrips()">List My Trips</button>
+
+      <pre id="out" style="margin-top:16px;background:#f4f4f4;padding:12px;border-radius:8px"></pre>
+
+      <script>
+        async function createTrip(){
+          const email = document.getElementById("email").value.trim();
+          const name = document.getElementById("name").value.trim();
+          const res = await fetch("/api/trips", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-User-Email": email,
+              "X-User-Name": name
+            },
+            body: JSON.stringify({
+              title: "My First Trip",
+              startDate: "2025-12-01",
+              endDate: "2025-12-05",
+              timezone: "America/New_York"
+            })
+          });
+          document.getElementById("out").textContent = await res.text();
+        }
+
+        async function listTrips(){
+          const email = document.getElementById("email").value.trim();
+          const res = await fetch("/api/trips", {
+            headers: { "X-User-Email": email }
+          });
+          document.getElementById("out").textContent =
+            JSON.stringify(await res.json(), null, 2);
+        }
+      </script>
+    </body>
+  </html>
+  `);
+});
+
+
 const port = process.env.PORT || 3000;
 app.listen(port, () => console.log(`API listening on ${port}`));
