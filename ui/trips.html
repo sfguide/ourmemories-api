@@ -1,0 +1,63 @@
+<div class="app">
+  <header class="topbar">
+    <h1>Trips</h1>
+    <button class="btn primary" id="btnNewTrip">New Trip</button>
+  </header>
+
+  <div id="tripsGrid" class="grid"></div>
+
+  <template id="tripCardTpl">
+    <a class="trip-card" href="#">
+      <div class="trip-cover"></div>
+      <div class="trip-meta">
+        <div class="trip-title"></div>
+        <div class="trip-dates"></div>
+      </div>
+    </a>
+  </template>
+</div>
+
+<style>
+  .app{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;padding:14px}
+  .topbar{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .btn{border:1px solid #ccc;border-radius:10px;padding:10px 12px;background:#fff}
+  .btn.primary{border-color:#111}
+  .grid{display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px}
+  .trip-card{display:block;text-decoration:none;color:inherit;border:1px solid #e5e5e5;border-radius:14px;overflow:hidden}
+  .trip-cover{height:160px;background:#f2f2f2;background-size:cover;background-position:center}
+  .trip-meta{padding:12px}
+  .trip-title{font-weight:700;font-size:16px}
+  .trip-dates{opacity:.75;margin-top:4px;font-size:13px}
+</style>
+
+<script>
+  // Replace with your API base
+  const API = "https://YOUR_API_DOMAIN";
+
+  async function loadTrips(){
+    const res = await fetch(`${API}/api/trips`, { credentials: "include" });
+    const trips = await res.json();
+
+    const grid = document.getElementById("tripsGrid");
+    grid.innerHTML = "";
+
+    const tpl = document.getElementById("tripCardTpl");
+
+    trips.forEach(t => {
+      const node = tpl.content.cloneNode(true);
+      const a = node.querySelector("a");
+      const cover = node.querySelector(".trip-cover");
+      const title = node.querySelector(".trip-title");
+      const dates = node.querySelector(".trip-dates");
+
+      cover.style.backgroundImage = t.coverUrl ? `url('${t.coverUrl}')` : "";
+      title.textContent = t.title || "Untitled Trip";
+      dates.textContent = (t.startDate && t.endDate) ? `${t.startDate} → ${t.endDate}` : "";
+
+      a.href = `trip.html?tripId=${encodeURIComponent(t.id)}`;
+      grid.appendChild(node);
+    });
+  }
+
+  loadTrips();
+</script>
