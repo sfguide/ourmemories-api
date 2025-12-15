@@ -1,63 +1,109 @@
-<div class="app">
-  <header class="topbar">
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Trips</title>
+  <style>
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;margin:0;background:#f6f6f6}
+    header{display:flex;align-items:center;justify-content:space-between;padding:14px;background:#fff;border-bottom:1px solid #e6e6e6}
+    h1{font-size:18px;margin:0}
+    .btn{border:1px solid #ccc;border-radius:10px;padding:10px 12px;background:#fff}
+    .wrap{padding:14px}
+    .card{display:block;background:#fff;border:1px solid #e6e6e6;border-radius:14px;overflow:hidden;text-decoration:none;color:inherit;margin-bottom:12px}
+    .cover{height:150px;background:#eee;background-size:cover;background-position:center}
+    .meta{padding:12px}
+    .title{font-weight:800}
+    .dates{opacity:.7;margin-top:4px;font-size:13px}
+    .row{display:flex;gap:8px;align-items:center}
+    input{border:1px solid #ddd;border-radius:10px;padding:10px;width:210px}
+    .hint{opacity:.7;font-size:12px;margin-top:6px}
+  </style>
+</head>
+<body>
+  <header>
     <h1>Trips</h1>
-    <button class="btn primary" id="btnNewTrip">New Trip</button>
+    <button class="btn" id="btnNew">New Trip</button>
   </header>
 
-  <div id="tripsGrid" class="grid"></div>
+  <div class="wrap">
+    <div class="row">
+      <input id="email" placeholder="your email" />
+      <button class="btn" id="btnSaveEmail">Use</button>
+    </div>
+    <div class="hint">This is MVP identity. Later we’ll replace with GoodBarber login.</div>
 
-  <template id="tripCardTpl">
-    <a class="trip-card" href="#">
-      <div class="trip-cover"></div>
-      <div class="trip-meta">
-        <div class="trip-title"></div>
-        <div class="trip-dates"></div>
-      </div>
-    </a>
-  </template>
-</div>
+    <div style="height:12px"></div>
+    <div id="list"></div>
+  </div>
 
-<style>
-  .app{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;padding:14px}
-  .topbar{display:flex;align-items:center;justify-content:space-between;gap:10px}
-  .btn{border:1px solid #ccc;border-radius:10px;padding:10px 12px;background:#fff}
-  .btn.primary{border-color:#111}
-  .grid{display:grid;grid-template-columns:1fr;gap:12px;margin-top:12px}
-  .trip-card{display:block;text-decoration:none;color:inherit;border:1px solid #e5e5e5;border-radius:14px;overflow:hidden}
-  .trip-cover{height:160px;background:#f2f2f2;background-size:cover;background-position:center}
-  .trip-meta{padding:12px}
-  .trip-title{font-weight:700;font-size:16px}
-  .trip-dates{opacity:.75;margin-top:4px;font-size:13px}
-</style>
+  <script>
+    const emailEl = document.getElementById("email");
+    const saved = localStorage.getItem("om_email") || "";
+    emailEl.value = saved;
 
-<script>
-  // Replace with your API base
-  const API = "https://YOUR_API_DOMAIN";
+    document.getElementById("btnSaveEmail").onclick = () => {
+      const v = emailEl.value.trim().toLowerCase();
+      if(!v) return alert("Enter an email");
+      localStorage.setItem("om_email", v);
+      loadTrips();
+    };
 
-  async function loadTrips(){
-    const res = await fetch(`${API}/api/trips`, { credentials: "include" });
-    const trips = await res.json();
+    async function api(path, opts={}){
+      const email = (localStorage.getItem("om_email")||"").trim();
+      if(!email) throw new Error("Set email first");
+      const headers = Object.assign({}, opts.headers || {}, { "X-User-Email": email });
+      const res = await fetch(path, { ...opts, headers });
+      if(!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
 
-    const grid = document.getElementById("tripsGrid");
-    grid.innerHTML = "";
+    async function loadTrips(){
+      const list = document.getElementById("list");
+      list.innerHTML = "Loading…";
+      try{
+        const trips = await api("/api/trips");
+        list.innerHTML = "";
+        if(!trips.length){
+          list.innerHTML = "<div style='opacity:.7'>No trips yet. Tap New Trip.</div>";
+          return;
+        }
+        trips.forEach(t=>{
+          const a = document.createElement("a");
+          a.className = "card";
+          a.href = `/ui/trip?tripId=${encodeURIComponent(t.id)}`;
+          a.innerHTML = `
+            <div class="cover" style="background-image:${t.coverUrl ? `url('${t.coverUrl}')` : "none"}"></div>
+            <div class="meta">
+              <div class="title">${t.title || "Untitled Trip"}</div>
+              <div class="dates">${(t.startDate||"")} ${(t.endDate?("→ "+t.endDate):"")}</div>
+            </div>
+          `;
+          list.appendChild(a);
+        });
+      }catch(e){
+        list.innerHTML = `<div style="color:#b00">Error: ${e.message}</div>`;
+      }
+    }
 
-    const tpl = document.getElementById("tripCardTpl");
+    document.getElementById("btnNew").onclick = async () => {
+      const title = prompt("Trip name?");
+      if(!title) return;
+      const startDate = prompt("Start date (YYYY-MM-DD) optional:") || null;
+      const endDate = prompt("End date (YYYY-MM-DD) optional:") || null;
+      try{
+        await api("/api/trips", {
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          body: JSON.stringify({ title, startDate, endDate, timezone:"America/New_York" })
+        });
+        loadTrips();
+      }catch(e){
+        alert(e.message);
+      }
+    };
 
-    trips.forEach(t => {
-      const node = tpl.content.cloneNode(true);
-      const a = node.querySelector("a");
-      const cover = node.querySelector(".trip-cover");
-      const title = node.querySelector(".trip-title");
-      const dates = node.querySelector(".trip-dates");
-
-      cover.style.backgroundImage = t.coverUrl ? `url('${t.coverUrl}')` : "";
-      title.textContent = t.title || "Untitled Trip";
-      dates.textContent = (t.startDate && t.endDate) ? `${t.startDate} → ${t.endDate}` : "";
-
-      a.href = `trip.html?tripId=${encodeURIComponent(t.id)}`;
-      grid.appendChild(node);
-    });
-  }
-
-  loadTrips();
-</script>
+    if(saved) loadTrips();
+  </script>
+</body>
+</html>
