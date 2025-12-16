@@ -65,6 +65,22 @@
       return email;
     }
 
+  async function uploadViaApi(file, kind) {
+    const fd = new FormData();
+    fd.append("tripId", tripId);
+    fd.append("kind", kind); // "media" or "attachment"
+    fd.append("file", file);
+
+    const res = await fetch("/api/uploads/proxy", {
+      method: "POST",
+      headers: { "X-User-Email": emailHeader() },
+      body: fd
+    });
+
+    if (!res.ok) throw new Error(await res.text());
+    return res.json(); // { storageKey, cdnUrl, sizeBytes, contentType }
+  }
+    
     function previewMedia(files){
       mediaPreview.innerHTML = "";
       [...files].slice(0,12).forEach(f=>{
