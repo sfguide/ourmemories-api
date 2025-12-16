@@ -52,7 +52,7 @@
 
   <script>
     const tripId = new URLSearchParams(location.search).get("tripId");
-
+    const API_BASE = "https://ourmemories-api.render.com";
     const mediaInput = document.getElementById("mediaInput");
     const attachInput = document.getElementById("attachInput");
     const mediaPreview = document.getElementById("mediaPreview");
@@ -71,7 +71,7 @@
     fd.append("kind", kind); // "media" or "attachment"
     fd.append("file", file);
 
-    const res = await fetch("/api/uploads/proxy", {
+    const res = await fetch('${API_BASE}/api/uploads/proxy', {
       method: "POST",
       headers: { "X-User-Email": emailHeader() },
       body: fd
@@ -100,32 +100,9 @@
 
     async function apiJSON(path, opts={}){
       const headers = Object.assign({}, opts.headers || {}, { "X-User-Email": emailHeader() });
-      const res = await fetch(path, { ...opts, headers });
+      const res = await fetch('${API_BASE}${path}', { ...opts, headers });
       if(!res.ok) throw new Error(await res.text());
       return res.json();
-    }
-
-    async function signUpload(file, kind){
-      return apiJSON("/api/uploads/sign", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify({
-          tripId,
-          kind, // "media" or "attachment"
-          filename: file.name,
-          contentType: file.type || "application/octet-stream",
-          sizeBytes: file.size
-        })
-      });
-    }
-
-    async function putFile(signedUrl, file){
-      const res = await fetch(signedUrl, {
-        method:"PUT",
-        headers:{ "Content-Type": file.type || "application/octet-stream" },
-        body: file
-      });
-      if(!res.ok) throw new Error("Upload failed");
     }
 
     document.getElementById("save").onclick = async () => {
