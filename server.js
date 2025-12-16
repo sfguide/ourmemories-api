@@ -463,5 +463,43 @@ app.post("/api/media/commit", requireEmail, async (req, res) => {
   }
 });
 
+app.post("/api/attachments/commit", requireEmail, async (req, res) => {
+  const { tripId, momentId, type, title, storageKey, cdnUrl, sizeBytes, url } = req.body || {};
+  if (!tripId || !type) return res.status(400).json({ error: "tripId and type required" });
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const user = await getOrCreateUser(client, req.identity);
+    const access = await requireTripAccess(client, tripId, user.id);
+    if (!access) return res.status(403).json({ error: "No access to trip" });
+
+    const ins = await client.query(
+      `INSERT INTO attachments (trip_id, moment_id, uploaded_by_user_id, type, title, storage_key, cdn_url, size_bytes, url)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+       RETURNING id`,
+      [
+        tripId,
+        momentId || null,
+        user.id,
+        type,
+        title || null,
+        storageKey || null,
+        cdnUrl || null,
+        Number(sizeBytes) || null,
+        url || null
+      ]
+    );
+
+    await client.query("COMMIT");
+    res.status(201).json({ id: ins.rows[0].id });
+  } catch (e) {
+    await client.query("ROLLBACK");
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 const port = process.env.PORT || 3000;
 app.listen(port, () => console.log(`API listening on ${port}`));
