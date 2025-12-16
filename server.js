@@ -22,7 +22,7 @@ app.use(
 );
 
 const s3 = new S3Client({
-  region: "us-east-001", // B2 ignores region mostly, but some SDK paths want it
+  region: "us-east-1", // B2 ignores region mostly, but some SDK paths want it
   endpoint: process.env.B2_S3_ENDPOINT,
   forcePathStyle: true,
   credentials: {
