@@ -9,8 +9,12 @@
     header{display:flex;align-items:center;justify-content:space-between;padding:14px;background:#fff;border-bottom:1px solid #e6e6e6}
     .btn{border:1px solid #ccc;border-radius:10px;padding:10px 12px;background:#fff}
     .wrap{padding:14px}
-    textarea{width:100%;border:1px solid #ddd;border-radius:12px;padding:10px;font-size:14px}
-    input{width:100%;border:1px solid #ddd;border-radius:12px;padding:10px;font-size:14px;margin-top:10px}
+    textarea,input{width:100%;border:1px solid #ddd;border-radius:12px;padding:10px;font-size:14px}
+    .card{background:#fff;border:1px solid #e6e6e6;border-radius:14px;padding:12px;margin-top:12px}
+    .lbl{font-weight:800;margin-bottom:8px}
+    .row{display:flex;gap:10px;overflow-x:auto;padding-top:10px}
+    .thumb{width:120px;height:90px;border-radius:12px;object-fit:cover;border:1px solid #eee}
+    .msg{margin-top:10px;opacity:.8}
   </style>
 </head>
 <body>
@@ -21,37 +25,159 @@
   </header>
 
   <div class="wrap">
-    <input id="location" placeholder="Location (optional)" />
-    <textarea id="story" rows="6" placeholder="Write a quick memory…"></textarea>
-    <div id="msg" style="margin-top:10px;opacity:.8"></div>
+    <div class="card">
+      <div class="lbl">Location (optional)</div>
+      <input id="location" placeholder="e.g., Siesta Key Beach" />
+    </div>
+
+    <div class="card">
+      <div class="lbl">Story</div>
+      <textarea id="story" rows="5" placeholder="Write a quick memory…"></textarea>
+    </div>
+
+    <div class="card">
+      <div class="lbl">Photos / Videos</div>
+      <input id="mediaInput" type="file" accept="image/*,video/*" multiple />
+      <div id="mediaPreview" class="row"></div>
+    </div>
+
+    <div class="card">
+      <div class="lbl">Attachments (PDF, audio, etc.)</div>
+      <input id="attachInput" type="file" multiple />
+      <div id="attachList" class="msg"></div>
+    </div>
+
+    <div id="msg" class="msg"></div>
   </div>
 
   <script>
     const tripId = new URLSearchParams(location.search).get("tripId");
 
-    async function post(path, body){
+    const mediaInput = document.getElementById("mediaInput");
+    const attachInput = document.getElementById("attachInput");
+    const mediaPreview = document.getElementById("mediaPreview");
+    const attachList = document.getElementById("attachList");
+    const msg = document.getElementById("msg");
+
+    function emailHeader(){
       const email = (localStorage.getItem("om_email")||"").trim();
-      const res = await fetch(path, {
-        method:"POST",
-        headers:{
-          "Content-Type":"application/json",
-          "X-User-Email": email
-        },
-        body: JSON.stringify(body)
+      if(!email) throw new Error("Set email on Trips page first.");
+      return email;
+    }
+
+    function previewMedia(files){
+      mediaPreview.innerHTML = "";
+      [...files].slice(0,12).forEach(f=>{
+        const img = document.createElement("img");
+        img.className = "thumb";
+        img.src = URL.createObjectURL(f);
+        mediaPreview.appendChild(img);
       });
+    }
+
+    function listAttach(files){
+      attachList.textContent = [...files].map(f => "• " + f.name).join("\n");
+    }
+
+    mediaInput.addEventListener("change", e => previewMedia(e.target.files));
+    attachInput.addEventListener("change", e => listAttach(e.target.files));
+
+    async function apiJSON(path, opts={}){
+      const headers = Object.assign({}, opts.headers || {}, { "X-User-Email": emailHeader() });
+      const res = await fetch(path, { ...opts, headers });
       if(!res.ok) throw new Error(await res.text());
       return res.json();
+    }
+
+    async function signUpload(file, kind){
+      return apiJSON("/api/uploads/sign", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({
+          tripId,
+          kind, // "media" or "attachment"
+          filename: file.name,
+          contentType: file.type || "application/octet-stream",
+          sizeBytes: file.size
+        })
+      });
+    }
+
+    async function putFile(signedUrl, file){
+      const res = await fetch(signedUrl, {
+        method:"PUT",
+        headers:{ "Content-Type": file.type || "application/octet-stream" },
+        body: file
+      });
+      if(!res.ok) throw new Error("Upload failed");
     }
 
     document.getElementById("save").onclick = async () => {
       const story = document.getElementById("story").value.trim();
       const locationName = document.getElementById("location").value.trim();
+      const mediaFiles = [...mediaInput.files];
+      const attachFiles = [...attachInput.files];
+
       try{
-        document.getElementById("msg").textContent = "Saving…";
-        await post(`/api/trips/${tripId}/moments`, { story, locationName });
+        msg.textContent = "Saving moment…";
+
+        // 1) Create moment in DB first
+        const moment = await apiJSON(`/api/trips/${tripId}/moments`, {
+          method:"POST",
+          headers:{ "Content-Type":"application/json" },
+          body: JSON.stringify({ story, locationName })
+        });
+        const momentId = moment.id;
+
+        // 2) Upload + commit media
+        for(const f of mediaFiles){
+          msg.textContent = `Uploading media: ${f.name}`;
+          const meta = await signUpload(f, "media");
+          await putFile(meta.signedUrl, f);
+
+          const type = f.type.startsWith("video/") ? "video" : "photo";
+          await apiJSON("/api/media/commit", {
+            method:"POST",
+            headers:{ "Content-Type":"application/json" },
+            body: JSON.stringify({
+              tripId, momentId, type,
+              storageKey: meta.storageKey,
+              cdnUrl: meta.cdnUrl,
+              sizeBytes: f.size
+            })
+          });
+        }
+
+        // 3) Upload + commit attachments
+        for(const f of attachFiles){
+          msg.textContent = `Uploading attachment: ${f.name}`;
+          const meta = await signUpload(f, "attachment");
+          await putFile(meta.signedUrl, f);
+
+          let aType = "other";
+          if (f.type === "application/pdf") aType = "pdf";
+          else if (f.type.startsWith("audio/")) aType = "audio";
+          else if (f.type.startsWith("image/")) aType = "image";
+
+          await apiJSON("/api/attachments/commit", {
+            method:"POST",
+            headers:{ "Content-Type":"application/json" },
+            body: JSON.stringify({
+              tripId, momentId,
+              type: aType,
+              title: f.name,
+              storageKey: meta.storageKey,
+              cdnUrl: meta.cdnUrl,
+              sizeBytes: f.size
+            })
+          });
+        }
+
+        msg.textContent = "Done!";
         location.href = `/ui/trip?tripId=${encodeURIComponent(tripId)}`;
       }catch(e){
-        document.getElementById("msg").textContent = e.message;
+        msg.textContent = e.message;
+        console.error(e);
       }
     };
   </script>
