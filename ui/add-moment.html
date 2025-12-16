@@ -133,6 +133,8 @@
         for(const f of mediaFiles){
           msg.textContent = `Uploading media: ${f.name}`;
           const meta = await signUpload(f, "media");
+          msg.textContent = "Signed host: " + (new URL(meta.signedUrl)).host;
+          
           await putFile(meta.signedUrl, f);
 
           const type = f.type.startsWith("video/") ? "video" : "photo";
