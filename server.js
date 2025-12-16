@@ -2,6 +2,9 @@ import express from "express";
 import cors from "cors";
 import pg from "pg";
 import dotenv from "dotenv";
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
+import crypto from "crypto";
 
 dotenv.config();
 
@@ -17,6 +20,15 @@ app.use(
     credentials: true
   })
 );
+
+const s3 = new S3Client({
+  region: "us-west-004", // B2 ignores region mostly, but some SDK paths want it
+  endpoint: process.env.B2_S3_ENDPOINT,
+  credentials: {
+    accessKeyId: process.env.B2_KEY_ID,
+    secretAccessKey: process.env.B2_APP_KEY
+  }
+});
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
@@ -379,6 +391,43 @@ app.get("/test", (req, res) => {
 app.get("/ui/trips", (req, res) => res.sendFile(process.cwd() + "/ui/trips.html"));
 app.get("/ui/trip", (req, res) => res.sendFile(process.cwd() + "/ui/trip.html"));
 app.get("/ui/add-moment", (req, res) => res.sendFile(process.cwd() + "/ui/add-moment.html"));
+
+app.post("/api/uploads/sign", requireEmail, async (req, res) => {
+  const { tripId, kind, filename, contentType, sizeBytes } = req.body || {};
+  if (!tripId || !kind || !filename) {
+    return res.status(400).json({ error: "tripId, kind, filename required" });
+  }
+
+  const client = await pool.connect();
+  try {
+    const user = await getOrCreateUser(client, req.identity);
+    const access = await requireTripAccess(client, tripId, user.id);
+    if (!access) return res.status(403).json({ error: "No access to trip" });
+
+    // Storage key format: trips/<tripId>/<media|attachments>/<random>_<filename>
+    const safeName = String(filename).replace(/[^a-zA-Z0-9._-]+/g, "_").slice(-80);
+    const random = crypto.randomBytes(10).toString("hex");
+    const folder = kind === "media" ? "media" : "attachments";
+    const storageKey = `trips/${tripId}/${folder}/${random}_${safeName}`;
+
+    const cmd = new PutObjectCommand({
+      Bucket: process.env.B2_BUCKET,
+      Key: storageKey,
+      ContentType: contentType || "application/octet-stream"
+      // For B2 public buckets, ACL isn't required. Keep it simple.
+    });
+
+    const signedUrl = await getSignedUrl(s3, cmd, { expiresIn: 60 * 10 }); // 10 minutes
+
+    const cdnUrl = `${process.env.B2_PUBLIC_BASE_URL}/${storageKey}`;
+
+    res.json({ signedUrl, storageKey, cdnUrl });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
 
 const port = process.env.PORT || 3000;
 app.listen(port, () => console.log(`API listening on ${port}`));
