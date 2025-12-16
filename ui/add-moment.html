@@ -145,51 +145,53 @@
         });
         const momentId = moment.id;
 
-        // 2) Upload + commit media
-        for(const f of mediaFiles){
+        // 2) Upload + commit media (via API proxy upload)
+        for (const f of mediaFiles) {
           msg.textContent = `Uploading media: ${f.name}`;
-          const meta = await signUpload(f, "media");
-          msg.textContent = "Signed host: " + (new URL(meta.signedUrl)).host;
-          
-          await putFile(meta.signedUrl, f);
-
-          const type = f.type.startsWith("video/") ? "video" : "photo";
+        
+          const meta = await uploadViaApi(f, "media"); // <-- NEW
+        
+          const type = (f.type || "").startsWith("video/") ? "video" : "photo";
           await apiJSON("/api/media/commit", {
-            method:"POST",
-            headers:{ "Content-Type":"application/json" },
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              tripId, momentId, type,
+              tripId,
+              momentId,
+              type,
               storageKey: meta.storageKey,
               cdnUrl: meta.cdnUrl,
-              sizeBytes: f.size
+              sizeBytes: meta.sizeBytes ?? f.size
             })
           });
-        }
+        }      
 
-        // 3) Upload + commit attachments
-        for(const f of attachFiles){
-          msg.textContent = `Uploading attachment: ${f.name}`;
-          const meta = await signUpload(f, "attachment");
-          await putFile(meta.signedUrl, f);
-
-          let aType = "other";
-          if (f.type === "application/pdf") aType = "pdf";
-          else if (f.type.startsWith("audio/")) aType = "audio";
-          else if (f.type.startsWith("image/")) aType = "image";
-
-          await apiJSON("/api/attachments/commit", {
-            method:"POST",
-            headers:{ "Content-Type":"application/json" },
-            body: JSON.stringify({
-              tripId, momentId,
-              type: aType,
-              title: f.name,
-              storageKey: meta.storageKey,
-              cdnUrl: meta.cdnUrl,
-              sizeBytes: f.size
-            })
-          });
-        }
+       // 3) Upload + commit attachments (via API proxy upload)
+      for (const f of attachFiles) {
+        msg.textContent = `Uploading attachment: ${f.name}`;
+      
+        const meta = await uploadViaApi(f, "attachment");
+      
+        let aType = "other";
+        if (f.type === "application/pdf") aType = "pdf";
+        else if ((f.type || "").startsWith("audio/")) aType = "audio";
+        // NOTE: keep images/videos in Media; attachments are for PDFs/audio/docs/etc.
+        // If you *do* want images as attachments, we can allow that later.
+      
+        await apiJSON("/api/attachments/commit", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tripId,
+            momentId,
+            type: aType,
+            title: f.name,
+            storageKey: meta.storageKey,
+            cdnUrl: meta.cdnUrl,
+            sizeBytes: meta.sizeBytes ?? f.size
+          })
+        });
+      }
 
         msg.textContent = "Done!";
         location.href = `/ui/trip?tripId=${encodeURIComponent(tripId)}`;
