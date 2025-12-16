@@ -5,6 +5,8 @@ import dotenv from "dotenv";
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import crypto from "crypto";
+import multer from "multer";
+import crypto from "crypto";
 
 dotenv.config();
 
@@ -35,6 +37,12 @@ const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 200 * 1024 * 1024 } // 200MB for now
+});
+
 
 function requireEmail(req, res, next) {
   const email = (req.header("X-User-Email") || "").trim().toLowerCase();
@@ -496,6 +504,41 @@ app.post("/api/attachments/commit", requireEmail, async (req, res) => {
     res.status(201).json({ id: ins.rows[0].id });
   } catch (e) {
     await client.query("ROLLBACK");
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/api/uploads/proxy", requireEmail, upload.single("file"), async (req, res) => {
+  const { tripId, kind } = req.body || {};
+  const file = req.file;
+
+  if (!tripId || !kind || !file) {
+    return res.status(400).json({ error: "tripId, kind, file required" });
+  }
+
+  const client = await pool.connect();
+  try {
+    const user = await getOrCreateUser(client, req.identity);
+    const ok = await requireTripAccess(client, tripId, user.id);
+    if (!ok) return res.status(403).json({ error: "No access to trip" });
+
+    const folder = kind === "media" ? "media" : "attachments";
+    const safe = String(file.originalname).replace(/[^a-zA-Z0-9._-]+/g, "_").slice(-80);
+    const rand = crypto.randomBytes(10).toString("hex");
+    const key = `trips/${tripId}/${folder}/${rand}_${safe}`;
+
+    await s3.send(new PutObjectCommand({
+      Bucket: process.env.B2_BUCKET,
+      Key: key,
+      Body: file.buffer,
+      ContentType: file.mimetype || "application/octet-stream"
+    }));
+
+    const cdnUrl = `${process.env.B2_PUBLIC_BASE_URL}/${key}`;
+    res.json({ storageKey: key, cdnUrl, sizeBytes: file.size, contentType: file.mimetype });
+  } catch (e) {
     res.status(500).json({ error: e.message });
   } finally {
     client.release();
