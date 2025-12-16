@@ -98,11 +98,15 @@
     mediaInput.addEventListener("change", e => previewMedia(e.target.files));
     attachInput.addEventListener("change", e => listAttach(e.target.files));
 
-    async function apiJSON(path, opts={}){
-      const headers = Object.assign({}, opts.headers || {}, { "X-User-Email": emailHeader() });
-      const res = await fetch('${API_BASE}${path}', { ...opts, headers });
-      if(!res.ok) throw new Error(await res.text());
-      return res.json();
+     async function apiJSON(path, opts = {}) {
+        const headers = Object.assign({}, opts.headers || {}, { "X-User-Email": emailHeader() });
+      
+        // If caller passes a full URL, use it. Otherwise prefix API_BASE.
+        const url = /^https?:\/\//i.test(path) ? path : `${API_BASE}${path}`;
+      
+        const res = await fetch(url, { ...opts, headers });
+        if (!res.ok) throw new Error(await res.text());
+        return res.json();
     }
 
     document.getElementById("save").onclick = async () => {
