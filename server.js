@@ -429,5 +429,39 @@ app.post("/api/uploads/sign", requireEmail, async (req, res) => {
   }
 });
 
+app.post("/api/media/commit", requireEmail, async (req, res) => {
+  const { tripId, momentId, type, storageKey, cdnUrl, sizeBytes } = req.body || {};
+  if (!tripId || !momentId || !type || !storageKey) {
+    return res.status(400).json({ error: "tripId, momentId, type, storageKey required" });
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const user = await getOrCreateUser(client, req.identity);
+    const access = await requireTripAccess(client, tripId, user.id);
+    if (!access) return res.status(403).json({ error: "No access to trip" });
+
+    // Ensure moment belongs to trip
+    const m = await client.query(`SELECT id FROM moments WHERE id=$1 AND trip_id=$2`, [momentId, tripId]);
+    if (!m.rowCount) return res.status(404).json({ error: "Moment not found in trip" });
+
+    const ins = await client.query(
+      `INSERT INTO media (trip_id, moment_id, type, storage_key, cdn_url, size_bytes)
+       VALUES ($1,$2,$3,$4,$5,$6)
+       RETURNING id`,
+      [tripId, momentId, type, storageKey, cdnUrl || null, Number(sizeBytes) || 0]
+    );
+
+    await client.query("COMMIT");
+    res.status(201).json({ id: ins.rows[0].id });
+  } catch (e) {
+    await client.query("ROLLBACK");
+    res.status(500).json({ error: e.message });
+  } finally {
+    client.release();
+  }
+});
+
 const port = process.env.PORT || 3000;
 app.listen(port, () => console.log(`API listening on ${port}`));
