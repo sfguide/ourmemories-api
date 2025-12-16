@@ -414,7 +414,7 @@ app.post("/api/uploads/sign", requireEmail, async (req, res) => {
     const cmd = new PutObjectCommand({
       Bucket: process.env.B2_BUCKET,
       Key: storageKey,
-      ContentType: contentType || "application/octet-stream"
+      // ContentType: contentType || "application/octet-stream"
       // For B2 public buckets, ACL isn't required. Keep it simple.
     });
 
