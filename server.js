@@ -15,13 +15,14 @@ app.use(express.json({ limit: "10mb" }));
 // CORS: set APP_ORIGIN to your GoodBarber/web domain later.
 // For MVP, you can leave APP_ORIGIN blank and allow all.
 const allowedOrigin = process.env.APP_ORIGIN || "*";
-app.use(
-  cors({
-    origin: allowedOrigin === "*" ? true : allowedOrigin,
-    credentials: true
-  })
-);
 
+app.use(cors({
+  origin: "*",
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "X-User-Email"]
+}));
+
+app.options("*", cors());
 const s3 = new S3Client({
   region: "us-east-1", // B2 ignores region mostly, but some SDK paths want it
   endpoint: process.env.B2_S3_ENDPOINT,
