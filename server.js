@@ -24,13 +24,17 @@ app.use(cors({
 
 app.options("*", cors());
 const s3 = new S3Client({
-  region: "us-east-1", // B2 ignores region mostly, but some SDK paths want it
-  endpoint: process.env.B2_S3_ENDPOINT,
+  region: process.env.B2_REGION,          // e.g. "us-east-005"
+  endpoint: process.env.B2_S3_ENDPOINT,   // your s3 endpoint
   forcePathStyle: true,
   credentials: {
     accessKeyId: process.env.B2_KEY_ID,
-    secretAccessKey: process.env.B2_APP_KEY
-  }
+    secretAccessKey: process.env.B2_APP_KEY,
+  },
+
+  // ✅ IMPORTANT: avoid SDK checksum behavior that breaks some S3-compatible targets
+  requestChecksumCalculation: "WHEN_REQUIRED",
+  responseChecksumValidation: "WHEN_REQUIRED",
 });
 
 const pool = new pg.Pool({
@@ -533,7 +537,8 @@ app.post("/api/uploads/proxy", requireEmail, upload.single("file"), async (req, 
       Bucket: process.env.B2_BUCKET,
       Key: key,
       Body: file.buffer,
-      ContentType: file.mimetype || "application/octet-stream"
+      ContentType: file.mimetype || "application/octet-stream",
+      ContentLength: file.buffer.length,
     }));
 
     const cdnUrl = `${process.env.B2_PUBLIC_BASE_URL}/${key}`;
