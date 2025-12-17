@@ -23,16 +23,16 @@ app.use(cors({
 }));
 
 app.options("*", cors());
+
 const s3 = new S3Client({
-  region: process.env.B2_REGION,          // e.g. "us-east-005"
-  endpoint: process.env.B2_S3_ENDPOINT,   // your s3 endpoint
+  endpoint: process.env.B2_S3_ENDPOINT,
+  region: process.env.B2_REGION, // now us-east-005
   forcePathStyle: true,
   credentials: {
     accessKeyId: process.env.B2_KEY_ID,
     secretAccessKey: process.env.B2_APP_KEY,
   },
 
-  // ✅ IMPORTANT: avoid SDK checksum behavior that breaks some S3-compatible targets
   requestChecksumCalculation: "WHEN_REQUIRED",
   responseChecksumValidation: "WHEN_REQUIRED",
 });
