@@ -560,5 +560,27 @@ app.post("/api/uploads/proxy", requireEmail, upload.single("file"), async (req, 
   }
 });
 
+//debug needs to be removedf
+import { HeadBucketCommand } from "@aws-sdk/client-s3";
+
+app.get("/debug/s3ping", async (req, res) => {
+  try {
+    const out = await s3.send(new HeadBucketCommand({ Bucket: process.env.B2_BUCKET }));
+    res.json({ ok: true, out });
+  } catch (e) {
+    res.status(500).json({
+      ok: false,
+      name: e.name,
+      message: e.message,
+      code: e.Code || e.code,
+      requestId: e.$metadata?.requestId,
+      httpStatus: e.$metadata?.httpStatusCode,
+      region: process.env.B2_REGION,
+      endpoint: process.env.B2_S3_ENDPOINT,
+      bucket: process.env.B2_BUCKET
+    });
+  }
+});
+
 const port = process.env.PORT || 3000;
 app.listen(port, () => console.log(`API listening on ${port}`));
