@@ -66,20 +66,23 @@
     }
 
   async function uploadViaApi(file, kind) {
-    const fd = new FormData();
-    fd.append("tripId", tripId);
-    fd.append("kind", kind); // "media" or "attachment"
-    fd.append("file", file);
+      const url = `${API_BASE}/api/uploads/proxy`;
+      console.log("uploadViaApi → POST", url, "kind=", kind, "file=", file.name);
+    
+      const fd = new FormData();
+      fd.append("tripId", tripId);
+      fd.append("kind", kind);
+      fd.append("file", file);
+    
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "X-User-Email": emailHeader() },
+        body: fd
+      });
 
-    const res = await fetch('${API_BASE}/api/uploads/proxy', {
-      method: "POST",
-      headers: { "X-User-Email": emailHeader() },
-      body: fd
-    });
-
-    if (!res.ok) throw new Error(await res.text());
-    return res.json(); // { storageKey, cdnUrl, sizeBytes, contentType }
-  }
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    }
     
     function previewMedia(files){
       mediaPreview.innerHTML = "";
@@ -98,17 +101,17 @@
     mediaInput.addEventListener("change", e => previewMedia(e.target.files));
     attachInput.addEventListener("change", e => listAttach(e.target.files));
 
-     async function apiJSON(path, opts = {}) {
-        const headers = Object.assign({}, opts.headers || {}, { "X-User-Email": emailHeader() });
-      
-        // If caller passes a full URL, use it. Otherwise prefix API_BASE.
-        const url = /^https?:\/\//i.test(path) ? path : `${API_BASE}${path}`;
-      
-        const res = await fetch(url, { ...opts, headers });
-        if (!res.ok) throw new Error(await res.text());
-        return res.json();
+    async function apiJSON(path, opts = {}) {
+      const headers = Object.assign({}, opts.headers || {}, { "X-User-Email": emailHeader() });
+      const url = /^https?:\/\//i.test(path) ? path : `${API_BASE}${path}`;
+    
+      console.log("apiJSON →", opts.method || "GET", url);
+    
+      const res = await fetch(url, { ...opts, headers });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
     }
-
+    
     document.getElementById("save").onclick = async () => {
       const story = document.getElementById("story").value.trim();
       const locationName = document.getElementById("location").value.trim();
