@@ -105,6 +105,16 @@ async function requireTripAccess(client, tripId, userId) {
   return m.rowCount > 0 ? m.rows[0] : null;
 }
 
+app.get("/debug/b2", (req,res) => {
+  res.json({
+    endpoint: process.env.B2_S3_ENDPOINT,
+    region: process.env.B2_REGION,
+    keyIdPrefix: (process.env.B2_KEY_ID || "").slice(0,6),
+    hasSecret: !!process.env.B2_APP_KEY,
+    bucket: process.env.B2_BUCKET
+  });
+});
+
 // --- Health ---
 app.get("/health", async (req, res) => {
   try {
